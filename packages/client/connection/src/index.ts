@@ -83,6 +83,16 @@ export interface ConnectionConfig {
   trustedHosts?: string[]
   /** Absolute browser-session lifetime in days. Default: 30. */
   cookieMaxAgeDays?: number
+  /**
+   * Whether the browser transport requires a launch token or session cookie.
+   * When `false`, every request that already passed the Host/Origin fence is
+   * admitted without authentication, the served index needs no token exchange,
+   * and the printed launch URL carries no `?token=`. The fence is unchanged, so
+   * a non-loopback deployment still has to declare `trustedHosts`. Disabling
+   * authentication grants full operator access to anyone who can reach the
+   * listener, including the Bash tool. Default: true.
+   */
+  requireAuth?: boolean
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
 }
@@ -91,6 +101,7 @@ export const Config: z<ConnectionConfig> = z.object({
   recovery: ConnectionRecoveryConfigSchema.default({}),
   trustedHosts: z.array(String).default([]),
   cookieMaxAgeDays: z.natural().min(1).default(30),
+  requireAuth: z.boolean().default(true),
   maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
 })
 
@@ -106,6 +117,7 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
   // The Loader resolves schema defaults; hand-built test contexts may pass none.
   const trustedHosts = config?.trustedHosts ?? []
   const cookieMaxAgeDays = config?.cookieMaxAgeDays ?? 30
+  const requireAuth = config?.requireAuth ?? true
   const maxRequestBodyBytes = config?.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES
   // Config boundary: a malformed entry fails the load loudly here rather than
   // silently authorizing its hostname prefix at request time.
@@ -115,6 +127,7 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
     ctx,
     trustedHosts,
     await BrowserAuth.create(ctx.root, ctx.credentials, cookieMaxAgeDays),
+    requireAuth,
   )
   ctx.inject(['webServer'], (webCtx) => {
     assertImageBodyCapacity(webCtx, maxRequestBodyBytes)

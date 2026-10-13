@@ -66,11 +66,13 @@ export class HostConnectionService extends Service implements HostConnectionHand
    * @param ctx - owning Connection plugin context.
    * @param trustedHosts - deployment authorities accepted by the Host/Origin fence.
    * @param browserAuth - process token and persistent browser-session owner.
+   * @param requireAuth - whether the fence is followed by browser authentication.
    */
   constructor(
     ctx: Context,
     private readonly trustedHosts: readonly string[],
     private readonly browserAuth: BrowserAuth,
+    private readonly requireAuth = true,
   ) {
     super(ctx, 'connection')
   }
@@ -96,16 +98,19 @@ export class HostConnectionService extends Service implements HostConnectionHand
   /** Apply the configured Host/Origin fence, then browser authentication. */
   requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection {
     if (!isTrustedApiRequest(request, this.trustedHosts)) return 403
+    if (!this.requireAuth) return undefined
     return this.browserAuth.isAuthenticated(request) ? undefined : 401
   }
 
   /** Authenticate an index request through the process-token exchange or cookie. */
   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean {
+    if (!this.requireAuth) return true
     return this.browserAuth.authorizeIndex(request, response)
   }
 
   /** Add this process's launch token to the clean application URL. */
   authenticatedUrl(baseUrl: string): string {
+    if (!this.requireAuth) return baseUrl
     return this.browserAuth.authenticatedUrl(baseUrl)
   }
 
